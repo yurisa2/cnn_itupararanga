@@ -9,6 +9,10 @@ from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D
 from tensorflow.keras.callbacks import *
 from tensorflow.keras.callbacks import ModelCheckpoint
 
+from kerastuner.tuners import RandomSearch
+from kerastuner.engine.hypermodel import HyperModel
+from kerastuner.engine.hyperparameters import HyperParameters
+
 dir_labels = os.listdir("images/rgb_files_multilabel/")
 
 whole = pd.DataFrame([], columns=['filename', 'label'])
@@ -81,9 +85,21 @@ y_train_one_hot = to_categorical(y_train_df.factorize()[0])
 def build_model(hp=None):
 
     model = Sequential()  # Create the architecture
-    model.add(Conv2D(32, (5, 5), activation='relu', input_shape=(217, 383, 3)))
+    model.add(Conv2D(filters=hp.Int('filters',min_value=32,max_value=512,step=32),
+                    kernel_size=(5, 5),
+                    activation=hp.Choice('activation',
+                    values=['relu', 'elu', 'tanh']),
+                    input_shape=(217, 383, 3)
+                    )
+              )
     model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Conv2D(64, (5, 5), activation='relu'))
+    model.add(Conv2D(filters=hp.Int('filters',min_value=32,max_value=512,step=32),
+                    kernel_size=(5, 5),
+                    activation=hp.Choice('activation',
+                    values=['relu', 'elu', 'tanh']),
+                    input_shape=(217, 383, 3)
+                    )
+              )
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Flatten())
     # a layer with 1000 neurons and activation function ReLu
@@ -103,12 +119,12 @@ def train_model(model, name="noname", tboard=False, ckpt=False):
 
     if tboard is True:
         logdir = 'logs/' + datetime.now().strftime("%Y%m%d-%H%M%S-") + name
+        if not os.path.exists('logs'):
+            os.makedirs('logs')
 
         os.mkdir(logdir)
         logdir = os.path.join(logdir)
 
-        if not os.path.exists('logs'):
-            os.makedirs('logs')
 
         tensorboard_callback = TensorBoard(log_dir=logdir,
                                            histogram_freq=1,
@@ -146,4 +162,30 @@ def train_model(model, name="noname", tboard=False, ckpt=False):
 
 model = build_model()
 
-history = train_model(model, tboard=True, ckpt=False)
+tuner = RandomSearch(
+    build_model,
+    objective='val_accuracy',
+    max_trials=5,
+    executions_per_trial=3,
+    directory='tuner',
+    project_name='helloworld')
+
+tuner.search_space_summary()
+
+
+tuner.search(x=x_train,
+             y=y_train_one_hot,
+             epochs=1,
+             # validation_data=(val_x, val_y)
+             validation_split=0.3
+             )
+
+
+tuner.results_summary()
+
+models = tuner.get_best_models(num_models=2)
+
+models[0].get_config()
+
+
+history = train_model(model, tboard=True, ckpt=True)
