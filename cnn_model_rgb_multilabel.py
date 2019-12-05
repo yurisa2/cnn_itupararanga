@@ -93,9 +93,9 @@ def build_model(hp=None):
                     )
               )
     model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Conv2D(filters=hp.Int('filters',min_value=32,max_value=512,step=32),
+    model.add(Conv2D(filters=hp.Int('filters2',min_value=32,max_value=512,step=32),
                     kernel_size=(5, 5),
-                    activation=hp.Choice('activation',
+                    activation=hp.Choice('activation2',
                     values=['relu', 'elu', 'tanh']),
                     input_shape=(217, 383, 3)
                     )
@@ -103,13 +103,15 @@ def build_model(hp=None):
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Flatten())
     # a layer with 1000 neurons and activation function ReLu
-    model.add(Dense(6, activation='relu'))
+    model.add(Dense(hp.Int('units',min_value=32,max_value=512,step=16), 
+                    activation=hp.Choice('activation_dense1',
+                    values=['relu', 'elu', 'tanh'])))
     # a layer with 2 output neurons 1 for each label using softmax activation f
     model.add(Dense(5, activation='softmax'))
 
     model.compile(loss='categorical_crossentropy',
                   optimizer='adam',
-                  metrics=['accuracy', 'mae', 'mse'])
+                  metrics=['accuracy', 'mae', 'mse', ])
     return model
 
 
@@ -160,11 +162,11 @@ def train_model(model, name="noname", tboard=False, ckpt=False):
     return hist
 
 
-model = build_model()
+#model = build_model()
 
 tuner = RandomSearch(
     build_model,
-    objective='val_accuracy',
+    objective='val_acc',
     max_trials=5,
     executions_per_trial=3,
     directory='tuner',
@@ -176,6 +178,8 @@ tuner.search_space_summary()
 tuner.search(x=x_train,
              y=y_train_one_hot,
              epochs=1,
+             batch_size=6,
+
              # validation_data=(val_x, val_y)
              validation_split=0.3
              )
