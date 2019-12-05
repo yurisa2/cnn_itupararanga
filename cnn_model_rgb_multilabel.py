@@ -9,10 +9,6 @@ from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D
 from tensorflow.keras.callbacks import *
 from tensorflow.keras.callbacks import ModelCheckpoint
 
-from kerastuner.tuners import RandomSearch
-from kerastuner.engine.hypermodel import HyperModel
-from kerastuner.engine.hyperparameters import HyperParameters
-
 dir_labels = os.listdir("images/rgb_files_multilabel/")
 
 whole = pd.DataFrame([], columns=['filename', 'label'])
@@ -82,40 +78,57 @@ y_train_one_hot = to_categorical(y_train_df.factorize()[0])
 # y_test_one_hot = to_categorical(y_test_df.factorize()[0])
 
 
-def build_model(hp=None):
+def build_model(filters1=32,
+                ksize1=(5, 5),
+                activation1='relu',
+                pool_size1=(2, 2),
+                stride1=2,
+                filters2=64,
+                ksize2=(5, 5),
+                activation2='relu',
+                pool_size2=(2, 2),
+                stride2=2,
+                dense1=8,
+                activation_dense1='relu',
+                activation_dense2='softmax',
+                general_optimizer='adam',
+                general_loss='categorical_crossentropy',
+                general_metrics=['accuracy', 'mae', 'mse', ]
+                ):
 
     model = Sequential()  # Create the architecture
-    model.add(Conv2D(filters=hp.Int('filters',min_value=32,max_value=512,step=32),
-                    kernel_size=(5, 5),
-                    activation=hp.Choice('activation',
-                    values=['relu', 'elu', 'tanh']),
-                    input_shape=(217, 383, 3)
-                    )
+    model.add(Conv2D(filters=filters1,
+                     kernel_size=ksize1,
+                     activation=activation1,
+                     input_shape=(217, 383, 3)
+                     )
               )
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Conv2D(filters=hp.Int('filters2',min_value=32,max_value=512,step=32),
-                    kernel_size=(5, 5),
-                    activation=hp.Choice('activation2',
-                    values=['relu', 'elu', 'tanh']),
-                    input_shape=(217, 383, 3)
-                    )
+    model.add(MaxPooling2D(pool_size=pool_size1, strides=stride1))
+    model.add(Conv2D(filters=filters2,
+                     kernel_size=ksize2,
+                     activation=activation2,
+                     input_shape=(217, 383, 3)
+                     )
               )
-    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(MaxPooling2D(pool_size=pool_size2, strides=stride2))
     model.add(Flatten())
     # a layer with 1000 neurons and activation function ReLu
-    model.add(Dense(hp.Int('units',min_value=32,max_value=512,step=16), 
-                    activation=hp.Choice('activation_dense1',
-                    values=['relu', 'elu', 'tanh'])))
+    model.add(Dense(dense1, activation=activation_dense1))
     # a layer with 2 output neurons 1 for each label using softmax activation f
-    model.add(Dense(5, activation='softmax'))
+    model.add(Dense(5, activation=activation_dense2))
 
-    model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
-                  metrics=['accuracy', 'mae', 'mse', ])
+    model.compile(loss=general_loss,
+                  optimizer=general_optimizer,
+                  metrics=general_metrics)
     return model
 
 
-def train_model(model, name="noname", tboard=False, ckpt=False):
+def train_model(model,
+                name="noname",
+                tboard=False,
+                ckpt=False,
+                epochs='10',
+                batch='3'):
 
     callbacks = []
 
@@ -126,7 +139,6 @@ def train_model(model, name="noname", tboard=False, ckpt=False):
 
         os.mkdir(logdir)
         logdir = os.path.join(logdir)
-
 
         tensorboard_callback = TensorBoard(log_dir=logdir,
                                            histogram_freq=1,
@@ -140,21 +152,22 @@ def train_model(model, name="noname", tboard=False, ckpt=False):
         if not os.path.exists('checkpoints'):
             os.makedirs('checkpoints')
 
-        ckpf = 'checkpoints/' + datetime.now().strftime("%Y%m%d-%H%M%S-") + name + '.hdf5'
-
-        ckpf = os.path.join(ckpf)
+        ckpf = os.path.join('checkpoints/',
+                            datetime.now().strftime("%Y%m%d-%H%M%S-"),
+                            name,
+                            '.hdf5')
 
         checkpointer = ModelCheckpoint(filepath=ckpf,
                                        verbose=1,
-                                       save_best_only=False)
+                                       save_best_only=True)
 
         callbacks.append(checkpointer)
         pass
 
     hist = model.fit(x_train,
                      y_train_one_hot,
-                     batch_size=3,
-                     epochs=2,
+                     batch_size=batch,
+                     epochs=epochs,
                      validation_split=0.3,
                      # validation_data=(x_test, y_test_one_hot),
                      callbacks=callbacks,
@@ -162,34 +175,8 @@ def train_model(model, name="noname", tboard=False, ckpt=False):
     return hist
 
 
-#model = build_model()
+model = build_model()
 
-tuner = RandomSearch(
-    build_model,
-    objective='val_acc',
-    max_trials=5,
-    executions_per_trial=3,
-    directory='tuner',
-    project_name='helloworld')
-
-tuner.search_space_summary()
-
-
-tuner.search(x=x_train,
-             y=y_train_one_hot,
-             epochs=1,
-             batch_size=6,
-
-             # validation_data=(val_x, val_y)
-             validation_split=0.3
-             )
-
-
-tuner.results_summary()
-
-models = tuner.get_best_models(num_models=2)
-
-models[0].get_config()
-
+model.summary()
 
 history = train_model(model, tboard=True, ckpt=True)
