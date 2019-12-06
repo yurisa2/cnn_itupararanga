@@ -8,6 +8,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D
 from tensorflow.keras.callbacks import *
 from tensorflow.keras.callbacks import ModelCheckpoint
+import talos
 
 dir_labels = os.listdir("images/rgb_files_multilabel/")
 
@@ -78,52 +79,38 @@ y_train_one_hot = to_categorical(y_train_df.factorize()[0])
 # y_test_one_hot = to_categorical(y_test_df.factorize()[0])
 
 
-def build_model(filters1=32,
-                ksize1=(5, 5),
-                activation1='relu',
-                pool_size1=(2, 2),
-                stride1=2,
-                filters2=64,
-                ksize2=(5, 5),
-                activation2='relu',
-                pool_size2=(2, 2),
-                stride2=2,
-                dense1=8,
-                activation_dense1='relu',
-                activation_dense2='softmax',
-                general_optimizer='adam',
-                general_loss='categorical_crossentropy',
-                general_metrics=['accuracy', 'mae', 'mse', ]
-                ):
+def build_model(params):
 
     model = Sequential()  # Create the architecture
-    model.add(Conv2D(filters=filters1,
-                     kernel_size=ksize1,
-                     activation=activation1,
+    model.add(Conv2D(filters=params['filters1'],
+                     kernel_size=params['ksize1'],
+                     activation=params['activation1'],
                      input_shape=(217, 383, 3)
                      )
               )
-    model.add(MaxPooling2D(pool_size=pool_size1, strides=stride1))
-    model.add(Conv2D(filters=filters2,
-                     kernel_size=ksize2,
-                     activation=activation2,
+    model.add(MaxPooling2D(pool_size=params['pool_size1'], strides=params['stride1']))
+    model.add(Conv2D(filters=params['filters2'],
+                     kernel_size=params['ksize2'],
+                     activation=params['activation2'],
                      input_shape=(217, 383, 3)
                      )
               )
-    model.add(MaxPooling2D(pool_size=pool_size2, strides=stride2))
+    model.add(MaxPooling2D(pool_size=params['pool_size2'], strides=params['stride2']))
     model.add(Flatten())
     # a layer with 1000 neurons and activation function ReLu
-    model.add(Dense(dense1, activation=activation_dense1))
+    model.add(Dense(params['dense1'], activation=params['activation_dense1']))
     # a layer with 2 output neurons 1 for each label using softmax activation f
-    model.add(Dense(5, activation=activation_dense2))
+    model.add(Dense(5, activation=params['activation_dense2']))
 
-    model.compile(loss=general_loss,
-                  optimizer=general_optimizer,
-                  metrics=general_metrics)
+    model.compile(loss=params['general_loss'],
+                  optimizer=params['general_optimizer'],
+                  metrics=['accuracy', 'mae', 'mse', ])
     return model
 
 
-def train_model(model,
+def train_model(x,
+                y,
+                model,
                 name="noname",
                 tboard=False,
                 ckpt=False,
@@ -164,8 +151,8 @@ def train_model(model,
         callbacks.append(checkpointer)
         pass
 
-    hist = model.fit(x_train,
-                     y_train_one_hot,
+    hist = model.fit(x,
+                     y,
                      batch_size=batch,
                      epochs=epochs,
                      validation_split=0.3,
@@ -175,8 +162,59 @@ def train_model(model,
     return hist
 
 
-model = build_model()
+# model = build_model()
 
-model.summary()
+def talos_model(params):
+    model = build_model(params)
+    history = train_model(x=x_train,
+                y=y_train_one_hot,
+                model=model,
+                name="noname",
+                tboard=False,
+                ckpt=False,
+                epochs='1',
+                batch='3')
+    return history, model
 
-history = train_model(model, tboard=True, ckpt=True)
+# p = {
+#     'filters1' : [12,24,32],
+#     'ksize1' : (5, 5),
+#     'activation1' : 'relu',
+#     'pool_size1' : (2, 2),
+#     'stride1' : 2,
+#     'filters2' : 64,
+#     'ksize2' : (5, 5),
+#     'activation2' : 'relu',
+#     'pool_size2' : (2, 2),
+#     'stride2' : 2,
+#     'dense1' : 8,
+#     'activation_dense1' : 'relu',
+#     'activation_dense2' : 'softmax',
+#     'general_optimizer' : 'adam',
+#     'general_loss' : 'categorical_crossentropy',
+#     }
+
+p = {
+    'filters1' : [12,24,32],
+    'ksize1' : [(5, 5)],
+    'activation1' : ['relu'],
+    'pool_size1' : [(2, 2)],
+    'stride1' : [2],
+    'filters2' : [64],
+    'ksize2' : [(5, 5)],
+    'activation2' : ['relu'],
+    'pool_size2' : [(2, 2)],
+    'stride2' : [2],
+    'dense1' : [8],
+    'activation_dense1' : ['relu'],
+    'activation_dense2' : ['softmax'],
+    'general_optimizer' : ['adam'],
+    'general_loss' : ['categorical_crossentropy'],
+    }
+
+t=None
+t = talos.Scan(x=x_train, y=y_train_one_hot, params=p, model=talos_model, experiment_name='talos_model')
+
+# model.summary()
+
+# history = train_model(model, tboard=True, ckpt=True)
